@@ -10,16 +10,24 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:file-change-count.helloWorld"
+		"onView:fileChangeCount"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
 		"commands": [
 			{
-				"command": "file-change-count.helloWorld",
-				"title": "Hello World"
+				"command": "fileChangeCount.refresh",
+				"title": "Refresh"
 			}
-		]
+		],
+		"views": {
+			"explorer": [
+				{
+					"id": "fileChangeCount",
+					"name": "Git Change Count"
+				}
+			]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run package",
