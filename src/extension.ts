@@ -9,17 +9,24 @@ interface CountsForPaths {
 
 async function getFileChangeCounts(repoAbsolutePath: string) {
 	const commits = await gitToJs(repoAbsolutePath);
+	
 	const counts: CountsForPaths = commits.reduceRight((counts: CountsForPaths, commit) => {
+
+		commit.filesRenamed.forEach(renameAction => {
+			counts[renameAction.newPath] = counts[renameAction.oldPath];
+			delete counts[renameAction.oldPath];
+		});
+
 		commit.filesAdded.concat(commit.filesModified).forEach(fileModification => {
 			const filePath = fileModification.path;
-			if (filePath in counts) {
-				counts[filePath] += 1;
-			} else {
-				counts[filePath] = 1;
+			if (counts[filePath] === undefined) {
+				counts[filePath] = 0;
 			}
+			counts[filePath] += 1;
 		});
 		return counts;
 	}, {});
+
 	return counts;
 }
 
@@ -44,26 +51,28 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<NodeDetail> {
       return Promise.resolve([]);
 		}
 		const workspaceRoot = this.workspaceRoot;
+
 		return this.loadCounts().then(() => {
 			const elementRelativePath: string = element?.id || '';
 			const elementAbsolutePath: string = path.posix.join(workspaceRoot, elementRelativePath);
 			const filesNames = fs.readdirSync(elementAbsolutePath);
-				const dispayItems: NodeDetail[] = filesNames.map(filename => {
-					const fileStat = fs.statSync(path.posix.join(elementAbsolutePath, filename));
-					const childRelativePath = path.posix.join(elementRelativePath, filename);
-					const treeItemCollpsibleState = 
-						fileStat.isDirectory() ? 
-						vscode.TreeItemCollapsibleState.Expanded : 
-						vscode.TreeItemCollapsibleState.None;
-					console.log(childRelativePath);
+
+			const dispayItems: NodeDetail[] = filesNames.map(filename => {
+				const fileStat = fs.statSync(path.posix.join(elementAbsolutePath, filename));
+				const childRelativePath = path.posix.join(elementRelativePath, filename);
+				const treeItemCollpsibleState = 
+					fileStat.isDirectory() ? 
+					vscode.TreeItemCollapsibleState.Expanded : 
+					vscode.TreeItemCollapsibleState.None;
+				
 					return new NodeDetail(
-						childRelativePath,
-						filename, 
-						treeItemCollpsibleState,
-						(this.countsForPaths && this.countsForPaths[childRelativePath] || 0)
-					);
-				});
-				return Promise.resolve(dispayItems);
+					childRelativePath,
+					filename, 
+					treeItemCollpsibleState,
+					(this.countsForPaths && this.countsForPaths[childRelativePath] || 0)
+				);
+			});
+			return Promise.resolve(dispayItems);
 		})
 	}
 }
