@@ -1,37 +1,94 @@
 import * as fs from 'fs';
-import path = require('path');
+import pathModule = require('path');
 import * as vscode from 'vscode';
 import { gitToJs } from 'git-parse';
 import * as _ from 'lodash';
 
-interface CountsForPaths {
-	[path: string]: number 
-};
+interface FileCount {
+	path: string,
+	count: number
+}
 
-async function getFileChangeCounts(repoAbsolutePath: string) {
+function getParentPaths(path: string): string[] {
+	let parents = [];
+	if (path === '.') {
+		return [];
+	}
+	const parentPath = pathModule.posix.dirname(path);
+	return [path].concat(getParentPaths(parentPath));
+}
+
+class CountsForPaths {
+	private countMap: { [path: string]: number };
+
+	constructor() {
+		this.countMap = {};
+	}
+
+	increment(path: string) {
+		if (this.countMap[path] === undefined) {
+			this.countMap[path] = 0;
+		}
+		this.countMap[path] += 1;
+	}
+
+	addCount(path: string, count: number) {
+		if (this.countMap[path] === undefined) {
+			this.countMap[path] = 0;
+		}
+		this.countMap[path] += count;
+	}
+
+	get(path: string): number {
+		return this.countMap[path] || 0;
+	}
+
+	renamePath(oldPath: string, newPath: string) {
+		this.countMap[newPath] = this.countMap[oldPath];
+		delete this.countMap[oldPath];
+	}
+
+	populateParents() {
+		const nodeKeys = Object.keys(this.countMap);
+		let countMap = this.countMap;
+		for (let node of nodeKeys) {
+			const parents = getParentPaths(node);
+			parents.forEach(parent => {
+				this.addCount(parent, this.get(node));
+			});
+		}
+	}
+	
+	getAsList(): FileCount[] {
+		return Object.keys(this.countMap).map(path => {
+			return {
+				path: path,
+				count: this.get(path) || 0
+			};
+		});
+	}
+}
+
+async function getFileChangeCounts(repoAbsolutePath: string): Promise<CountsForPaths> {
 	const commits = await gitToJs(repoAbsolutePath);
-
+	
 	const counts: CountsForPaths = commits.reduceRight((counts: CountsForPaths, commit) => {
 
 		commit.filesRenamed.forEach(renameAction => {
-			counts[renameAction.newPath] = counts[renameAction.oldPath];
-			delete counts[renameAction.oldPath];
+			counts.renamePath(renameAction.oldPath, renameAction.newPath);
 		});
 
 		commit.filesAdded.concat(commit.filesModified).forEach(fileModification => {
 			const filePath = fileModification.path;
-			if (counts[filePath] === undefined) {
-				counts[filePath] = 0;
-			}
-			counts[filePath] += 1;
+			counts.increment(filePath);
 		});
 		return counts;
-	}, {});
-
+	}, new CountsForPaths());
+	counts.populateParents();
 	return counts;
 }
 
-class FileChangeCountProvider implements vscode.TreeDataProvider<NodeDetail> {
+class FileChangeCountProvider implements vscode.TreeDataProvider<FileCount> {
 	constructor(private workspaceRoot?: string, private countsForPaths?: CountsForPaths) {
 		console.log("workspace root is " + this.workspaceRoot);
 	}
@@ -57,9 +114,7 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<NodeDetail> {
 
 		return this.loadCounts().then(() => {
 			if (this.countsForPaths) {
-				const fileCounts = Object.keys(this.countsForPaths).map(path => {
-					return new FileCount(path, (this.countsForPaths? this.countsForPaths[path] || 0 : 0));
-				});
+				const fileCounts: FileCount[] = this.countsForPaths.getAsList();
 				const fileCountsSorted = _.sortBy(fileCounts, f => -f.count);
 				return Promise.resolve(fileCountsSorted);
 			} else {
@@ -92,13 +147,6 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<NodeDetail> {
 	}
 }
 
-
-class FileCount  {
-	constructor(
-		public readonly path: string,
-		public readonly count: number
-	) {}
-}
 
 export function activate(context: vscode.ExtensionContext) {
 	const rootPath = (vscode.workspace.workspaceFolders && (vscode.workspace.workspaceFolders.length > 0))
