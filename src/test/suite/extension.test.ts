@@ -5,11 +5,20 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 // import * as myExtension from '../../extension';
 
+import { getParentPaths } from '../../extension';
+
 suite('Extension Test Suite', () => {
 	vscode.window.showInformationMessage('Start all tests.');
-
-	test('Sample test', () => {
-		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
-		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
+	suite('Test getParentPaths', () => {
+		test('Returns all parent paths', () => {
+			const path = 'src/html/index.html';
+			const expectedPaths = [
+				'src/html',
+				'src',
+				'.'
+			];
+			const returnedPaths = getParentPaths(path);
+			assert.deepStrictEqual(returnedPaths, expectedPaths);
+		});
 	});
 });
