@@ -11,18 +11,17 @@ interface FileCount {
 	terminalFile: boolean
 }
 
-function getParentPaths(path: string): string[] {
+export function getParentPaths(path: string): string[] {
 	let parents = [];
 	if (path === '.') {
 		return [];
 	}
 	const parentPath = pathModule.posix.dirname(path);
-	return [path].concat(getParentPaths(parentPath));
+	return [parentPath].concat(getParentPaths(parentPath));
 }
 
 function populateFraction(fileCounts: FileCount[]): FileCount[] {
 	const totalCount = fileCounts
-		//.filter(fileCount => fileCount.terminalFile)
 		.map(f => f.count)
 		.reduce((a, b) => a + b, 0);
 	return fileCounts.map(fc => ({...fc, fraction: fc.count / totalCount}));
@@ -40,14 +39,11 @@ interface ChildrenList {
 }
 function getDirectChildrenForPath(parentPath: string, allPaths: string[]): ChildrenList[] {
 	return allPaths
-		.filter(path => 
-			//path.startsWith(parentPath) && path !== parentPath
-			pathModule.dirname(path) === parentPath
+		.filter(path =>
+			path !== '.' && pathModule.dirname(path) === parentPath
 		)
 		.map(childPath => {
 			const hasChildren = allPaths.filter(path =>
-				// path => path.startsWith(childPath) && 
-				// path !== childPath
 				pathModule.dirname(path) === childPath
 			).length > 0;
 			return {
