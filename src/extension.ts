@@ -7,8 +7,10 @@ import * as _ from 'lodash';
 interface FileCount {
 	path: string,
 	count: number,
+	fraction?: number,
 	terminalFile: boolean
 }
+
 function getParentPaths(path: string): string[] {
 	let parents = [];
 	if (path === '.') {
@@ -18,6 +20,19 @@ function getParentPaths(path: string): string[] {
 	return [path].concat(getParentPaths(parentPath));
 }
 
+function populateFraction(fileCounts: FileCount[]): FileCount[] {
+	const totalCount = fileCounts
+		//.filter(fileCount => fileCount.terminalFile)
+		.map(f => f.count)
+		.reduce((a, b) => a + b, 0);
+	return fileCounts.map(fc => ({...fc, fraction: fc.count / totalCount}));
+}
+
+const TOTAL_INDICATORS = 300;
+
+function fractionToBar(fraction: number): string {
+	return _.repeat('.', Math.round(TOTAL_INDICATORS * fraction));
+}
 
 interface ChildrenList {
 	path: string,
@@ -119,15 +134,16 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<FileCount> {
 			return Promise.resolve();
 		}
 	}
-	onDidChangeTreeData?: vscode.Event<void | FileCount | null | undefined> | undefined;
+	
 	getTreeItem(element: FileCount): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		const label = pathModule.basename(element.path);
 		let treeItem = new vscode.TreeItem(label);
-		treeItem.description = element.count.toString();
+		treeItem.description = element.count.toString() + ' ' + fractionToBar(element.fraction || 0);
 		treeItem.collapsibleState = element.terminalFile ? 
 			vscode.TreeItemCollapsibleState.None :
 			vscode.TreeItemCollapsibleState.Collapsed;
 		return treeItem;
+
 	}
 	getChildren(element?: FileCount): vscode.ProviderResult<FileCount[]> {
 		if (!this.workspaceRoot) {
@@ -146,7 +162,8 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<FileCount> {
 					terminalFile: !c.hasChildren
 				}));
 				const fileCountsSorted = _.sortBy(fileCounts, f => -f.count);
-				return Promise.resolve(fileCountsSorted);
+				const fileCountsWithFractions = populateFraction(fileCountsSorted);
+				return Promise.resolve(fileCountsWithFractions);
 			} else {
 				return Promise.resolve([]);
 			}
