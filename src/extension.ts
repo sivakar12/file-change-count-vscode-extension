@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import path = require('path');
 import * as vscode from 'vscode';
 import { gitToJs } from 'git-parse';
+import * as _ from 'lodash';
 
 interface CountsForPaths {
 	[path: string]: number 
@@ -41,11 +42,13 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<NodeDetail> {
 			return Promise.resolve();
 		}
 	}
-	onDidChangeTreeData?: vscode.Event<void | NodeDetail | null | undefined> | undefined;
-	getTreeItem(element: NodeDetail): vscode.TreeItem | Thenable<vscode.TreeItem> {
-		return element;
+	onDidChangeTreeData?: vscode.Event<void | FileCount | null | undefined> | undefined;
+	getTreeItem(element: FileCount): vscode.TreeItem | Thenable<vscode.TreeItem> {
+		let treeItem = new vscode.TreeItem(element.path);
+		treeItem.description = element.count.toString();
+		return treeItem;
 	}
-	getChildren(element?: NodeDetail): vscode.ProviderResult<NodeDetail[]> {
+	getChildren(): vscode.ProviderResult<FileCount[]> {
 		if (!this.workspaceRoot) {
 			vscode.window.showInformationMessage('Empty workspace');
       return Promise.resolve([]);
@@ -54,10 +57,11 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<NodeDetail> {
 
 		return this.loadCounts().then(() => {
 			if (this.countsForPaths) {
-				const nodeDetails = Object.keys(this.countsForPaths).map(path => {
-					return new NodeDetail(path, path, vscode.TreeItemCollapsibleState.None, (this.countsForPaths? this.countsForPaths[path] : 0));
+				const fileCounts = Object.keys(this.countsForPaths).map(path => {
+					return new FileCount(path, (this.countsForPaths? this.countsForPaths[path] || 0 : 0));
 				});
-				return Promise.resolve(nodeDetails);
+				const fileCountsSorted = _.sortBy(fileCounts, f => -f.count);
+				return Promise.resolve(fileCountsSorted);
 			} else {
 				return Promise.resolve([]);
 			}
@@ -89,16 +93,11 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<NodeDetail> {
 }
 
 
-class NodeDetail extends vscode.TreeItem {
+class FileCount  {
 	constructor(
-		public readonly id: string,
-		public readonly label: string,
-		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-		public changeCount: number
-	) {
-		super(label, collapsibleState);
-		this.description = changeCount.toString();
-	}
+		public readonly path: string,
+		public readonly count: number
+	) {}
 }
 
 export function activate(context: vscode.ExtensionContext) {
