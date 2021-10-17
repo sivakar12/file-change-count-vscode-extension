@@ -6,9 +6,9 @@ import * as _ from 'lodash';
 
 interface FileCount {
 	path: string,
-	count: number
+	count: number,
+	terminalFile: boolean
 }
-
 function getParentPaths(path: string): string[] {
 	let parents = [];
 	if (path === '.') {
@@ -16,6 +16,30 @@ function getParentPaths(path: string): string[] {
 	}
 	const parentPath = pathModule.posix.dirname(path);
 	return [path].concat(getParentPaths(parentPath));
+}
+
+
+interface ChildrenList {
+	path: string,
+	hasChildren: boolean
+}
+function getDirectChildrenForPath(parentPath: string, allPaths: string[]): ChildrenList[] {
+	return allPaths
+		.filter(path => 
+			//path.startsWith(parentPath) && path !== parentPath
+			pathModule.dirname(path) === parentPath
+		)
+		.map(childPath => {
+			const hasChildren = allPaths.filter(path =>
+				// path => path.startsWith(childPath) && 
+				// path !== childPath
+				pathModule.dirname(path) === childPath
+			).length > 0;
+			return {
+				path: childPath,
+				hasChildren
+			};
+		});
 }
 
 class CountsForPaths {
@@ -58,14 +82,9 @@ class CountsForPaths {
 			});
 		}
 	}
-	
-	getAsList(): FileCount[] {
-		return Object.keys(this.countMap).map(path => {
-			return {
-				path: path,
-				count: this.get(path) || 0
-			};
-		});
+
+	getAllPaths(): string[] {
+		return Object.keys(this.countMap);
 	}
 }
 
@@ -85,6 +104,7 @@ async function getFileChangeCounts(repoAbsolutePath: string): Promise<CountsForP
 		return counts;
 	}, new CountsForPaths());
 	counts.populateParents();
+	console.log(counts);
 	return counts;
 }
 
@@ -101,11 +121,15 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<FileCount> {
 	}
 	onDidChangeTreeData?: vscode.Event<void | FileCount | null | undefined> | undefined;
 	getTreeItem(element: FileCount): vscode.TreeItem | Thenable<vscode.TreeItem> {
-		let treeItem = new vscode.TreeItem(element.path);
+		const label = pathModule.basename(element.path);
+		let treeItem = new vscode.TreeItem(label);
 		treeItem.description = element.count.toString();
+		treeItem.collapsibleState = element.terminalFile ? 
+			vscode.TreeItemCollapsibleState.None :
+			vscode.TreeItemCollapsibleState.Collapsed;
 		return treeItem;
 	}
-	getChildren(): vscode.ProviderResult<FileCount[]> {
+	getChildren(element?: FileCount): vscode.ProviderResult<FileCount[]> {
 		if (!this.workspaceRoot) {
 			vscode.window.showInformationMessage('Empty workspace');
       return Promise.resolve([]);
@@ -114,36 +138,19 @@ class FileChangeCountProvider implements vscode.TreeDataProvider<FileCount> {
 
 		return this.loadCounts().then(() => {
 			if (this.countsForPaths) {
-				const fileCounts: FileCount[] = this.countsForPaths.getAsList();
+				let path = element?.path || '.';
+				let children = getDirectChildrenForPath(path, this.countsForPaths.getAllPaths());
+				const fileCounts: FileCount[] = children.map(c => ({
+					path: c.path, 
+					count: this.countsForPaths?.get(c.path) || 0, 
+					terminalFile: !c.hasChildren
+				}));
 				const fileCountsSorted = _.sortBy(fileCounts, f => -f.count);
 				return Promise.resolve(fileCountsSorted);
 			} else {
 				return Promise.resolve([]);
 			}
 		});
-
-		// return this.loadCounts().then(() => {
-		// 	const elementRelativePath: string = element?.id || '';
-		// 	const elementAbsolutePath: string = path.posix.join(workspaceRoot, elementRelativePath);
-		// 	const filesNames = fs.readdirSync(elementAbsolutePath);
-
-		// 	const dispayItems: NodeDetail[] = filesNames.map(filename => {
-		// 		const fileStat = fs.statSync(path.posix.join(elementAbsolutePath, filename));
-		// 		const childRelativePath = path.posix.join(elementRelativePath, filename);
-		// 		const treeItemCollpsibleState = 
-		// 			fileStat.isDirectory() ? 
-		// 			vscode.TreeItemCollapsibleState.Expanded : 
-		// 			vscode.TreeItemCollapsibleState.None;
-				
-		// 			return new NodeDetail(
-		// 			childRelativePath,
-		// 			filename, 
-		// 			treeItemCollpsibleState,
-		// 			(this.countsForPaths && this.countsForPaths[childRelativePath] || 0)
-		// 		);
-		// 	});
-		// 	return Promise.resolve(dispayItems);
-		// })
 	}
 }
 
