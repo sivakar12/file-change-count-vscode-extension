@@ -2,7 +2,7 @@
 	"name": "file-change-count",
 	"displayName": "file-change-count",
 	"description": "Displays the number of changes a file went through in version control",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"engines": {
 		"vscode": "^1.61.0"
 	},
