@@ -3,6 +3,11 @@
 	"displayName": "file-change-count",
 	"description": "Displays the number of changes a file went through in version control",
 	"version": "0.1.0",
+	"publisher": "sivakar12",
+	"repository": {
+		"type": "git",
+    	"url": "https://github.com/sivakar12/file-change-count-vscode-extension.git"
+	},
 	"engines": {
 		"vscode": "^1.61.0"
 	},
